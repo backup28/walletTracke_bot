@@ -8,6 +8,7 @@ import { Token, User } from './schemas/token.schema';
 import * as dotenv from 'dotenv';
 import { getTimestamps, isWithinOneHour } from './utils/query.utils';
 dotenv.config();
+import { Cron, CronExpression } from '@nestjs/schedule';
 
 // const token =
 //   process.env.NODE_ENV === 'production'
@@ -19,6 +20,7 @@ const token = process.env.TEST_TOKEN;
 export class TrackerBotService {
   private readonly trackerBot: TelegramBot;
   private logger = new Logger(TrackerBotService.name);
+  private isRunning = false;
 
   constructor(
     private readonly httpService: HttpService,
@@ -175,7 +177,7 @@ export class TrackerBotService {
   swaps(
     orderBy: timestamp
     orderDirection: desc
-    where: {sender: ${process.env.MEV_wallet},
+    where: {sender: "${process.env.MEV_wallet}",
     timestamp_gte: ${sixHoursAgo},
     timestamp_lte: ${currentTime},
     amount0In: "0"}
@@ -289,6 +291,22 @@ export class TrackerBotService {
       return;
     } catch (error) {
       console.log(error);
+    } finally {
+      this.isRunning = false; // Reset the running flag after completion
+      this.logger.log('Finished queryBlockchain execution');
     }
   };
+
+  @Cron('*/30 * * * * *') // Executes every 30 seconds
+  async handleCron() {
+    console.log('hey');
+    if (this.isRunning) {
+      this.logger.warn('Previous execution still running, skipping this round');
+      return;
+    }
+
+    this.isRunning = true; // Set the running flag to true
+    console.log('hey');
+    await this.queryBlockchain();
+  }
 }
