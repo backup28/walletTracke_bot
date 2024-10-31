@@ -5,6 +5,10 @@ import { HttpModule } from '@nestjs/axios';
 import { DatabaseModule } from 'src/database/database.module';
 import { Token, TokenSchema, User, UserSchema } from './schemas/token.schema';
 import { MongooseModule } from '@nestjs/mongoose';
+import {
+  AlertedToken,
+  AlertedTokenSchema,
+} from './schemas/alertedToken.schema';
 
 @Module({
   imports: [
@@ -12,6 +16,9 @@ import { MongooseModule } from '@nestjs/mongoose';
     DatabaseModule,
     MongooseModule.forFeature([{ name: Token.name, schema: TokenSchema }]),
     MongooseModule.forFeature([{ name: User.name, schema: UserSchema }]),
+    MongooseModule.forFeature([
+      { name: AlertedToken.name, schema: AlertedTokenSchema },
+    ]),
   ],
   providers: [TrackerBotService],
   controllers: [TrackerBotController],

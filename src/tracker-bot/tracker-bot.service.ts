@@ -8,7 +8,8 @@ import { Token, User } from './schemas/token.schema';
 import * as dotenv from 'dotenv';
 import { getTimestamps, isWithinOneHour } from './utils/query.utils';
 dotenv.config();
-import { Cron, CronExpression } from '@nestjs/schedule';
+import { Cron } from '@nestjs/schedule';
+import { AlertedToken } from './schemas/alertedToken.schema';
 
 // const token =
 //   process.env.NODE_ENV === 'production'
@@ -25,6 +26,8 @@ export class TrackerBotService {
   constructor(
     private readonly httpService: HttpService,
     @InjectModel(Token.name) private readonly TokenModel: Model<Token>,
+    @InjectModel(Token.name)
+    private readonly AlertedTokenModel: Model<AlertedToken>,
     @InjectModel(User.name) private readonly UserModel: Model<User>,
   ) {
     this.trackerBot = new TelegramBot(token, { polling: true });
@@ -167,6 +170,46 @@ export class TrackerBotService {
     }
   };
 
+  saveAlertedTokens = async () => {
+    try {
+      const alertedTokens = await this.TokenModel.find({
+        swapsCount: { $gte: 20 },
+      });
+
+      if (alertedTokens.length === 0) {
+        console.log('No alerted tokens to save.');
+        return;
+      }
+
+      // Map alerted tokens to AlertedTokenModel structure
+      const alertedTokenDocs = alertedTokens.map((token) => ({
+        tokenContractAddress: token.tokenContractAddress,
+        tokenPairContractAddress: token.tokenPairContractAddress,
+        swapHashes: token.swapHashes,
+        name: token.name,
+        swapsCount: token.swapsCount,
+        tokenAge: token.tokenAge,
+        firstBuyHash: token.firstBuyHash,
+        firstBuyTime: token.firstBuyTime,
+        symbol: token.symbol,
+        decimal: token.decimal,
+      }));
+
+      // Batch insert using insertMany
+      await this.AlertedTokenModel.insertMany(alertedTokenDocs);
+
+      // Delete processed tokens from TokenModel
+      const tokenIds = alertedTokens.map((token) => token._id);
+      await this.TokenModel.deleteMany({ _id: { $in: tokenIds } });
+
+      console.log(
+        'Alerted tokens saved and original tokens deleted successfully.',
+      );
+    } catch (error) {
+      console.log('Error saving alerted tokens:', error);
+    }
+  };
+
   queryBlockchain = async (): Promise<unknown> => {
     try {
       // Function to get the current time and 6 hours ago in UNIX timestamps
@@ -296,8 +339,7 @@ export class TrackerBotService {
       this.logger.log('Finished queryBlockchain execution');
     }
   };
-
-  @Cron('*/30 * * * * *') // Executes every 30 seconds
+  @Cron(`${process.env.CRON}`) // Executes every 30 seconds
   async handleCron() {
     console.log('hey');
     if (this.isRunning) {
